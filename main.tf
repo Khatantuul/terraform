@@ -1,7 +1,7 @@
 # main.tf
 
 provider "google" {
-  credentials = file("/Users/khatna/Downloads/compact-haiku-414222-e35cdefbc10a.json")
+  
   project     = var.project_id
   region      = var.region
 }
