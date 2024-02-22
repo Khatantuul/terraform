@@ -15,6 +15,8 @@ variable "all_vpcs" {
     webappsubnetcidr  = string
     dbsubnet           = string
     dbsubnetcidr      = string
-    
+    image = string
+    size = string
+    disktype = string
   }))
 }
