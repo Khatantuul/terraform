@@ -50,7 +50,7 @@ variable "all_vpcs" {
     private_ip_purpose          = string
     private_ip_address_type     = string
     private_ip_prefix_length    = number
-    cloudsql_private_ip_address = string
+    # cloudsql_private_ip_address = string
     cloudsql_port               = string
     private_vpc_connection_service = string
     postgres_db_instance_name   = string
@@ -64,6 +64,13 @@ variable "all_vpcs" {
     db_instance_ipv4_enabled  = bool
     postgres_db_name          = string
     postgres_db_user_name = string
+    service_account_id = string
+    iam_bind_logging_role = string
+    iam_bind_monitoring_role = string
+    domain = string
+    dns_record_type_A = string
+    cache_ttl = number
+    dns_managed_zone = string
           
   }))
 }

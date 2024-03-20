@@ -105,7 +105,7 @@ resource "google_compute_instance" "my-instance" {
   metadata_startup_script = <<-EOT
     #!/bin/bash
 
-    echo "spring.datasource.url=jdbc:postgresql://${each.value.cloudsql_private_ip_address}:${each.value.cloudsql_port}/webapp" > /opt/application.properties
+    echo "spring.datasource.url=jdbc:postgresql://${google_sql_database_instance.postgres-db-instance[each.key].ip_address.0.ip_address}:${each.value.cloudsql_port}/webapp" > /opt/application.properties
     echo "spring.datasource.username=${google_sql_user.postgres-db-user[each.key].name}" >> /opt/application.properties
     echo "spring.datasource.password=${google_sql_user.postgres-db-user[each.key].password}" >> /opt/application.properties
     echo "spring.datasource.hikari.connection-timeout=3000" >> /opt/application.properties
@@ -115,6 +115,12 @@ resource "google_compute_instance" "my-instance" {
     echo "spring.jpa.properties.hibernate.format_sql=true"
   
   EOT
+
+
+  service_account {
+    email  = google_service_account.service_account[each.key].email
+    scopes = ["cloud-platform"]
+  }
 
   depends_on = [google_sql_database_instance.postgres-db-instance]
 }
@@ -195,3 +201,43 @@ resource "google_sql_user" "postgres-db-user" {
   instance = google_sql_database_instance.postgres-db-instance[each.key].name
   password = random_password.password.result
 }
+
+
+
+resource "google_service_account" "service_account" {
+  for_each = var.all_vpcs
+  account_id   = each.value.service_account_id
+  # display_name = "Khatnaa Service Account"
+}
+
+
+
+resource "google_project_iam_binding" "iam_bind" {
+  for_each = var.all_vpcs
+  project = var.project_id
+  role    = each.value.iam_bind_logging_role
+
+  members = [
+    "serviceAccount:${google_service_account.service_account[each.key].email}",
+  ]
+}
+resource "google_project_iam_binding" "iam_bind_two" {
+  for_each = var.all_vpcs
+  project = var.project_id
+  role    = each.value.iam_bind_monitoring_role
+
+  members = [
+    "serviceAccount:${google_service_account.service_account[each.key].email}",
+  ]
+}
+
+resource "google_dns_record_set" "example_record" {
+  for_each = var.all_vpcs
+  name    = each.value.domain
+  type    = each.value.dns_record_type_A
+  ttl     = each.value.cache_ttl
+  managed_zone = each.value.dns_managed_zone
+  rrdatas = [google_compute_instance.my-instance[each.key].network_interface[0].access_config[0].nat_ip]
+}
+
+
