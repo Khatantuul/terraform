@@ -113,6 +113,8 @@ resource "google_compute_instance" "my-instance" {
     echo "spring.jpa.hibernate.ddl-auto=update" >> /opt/application.properties
     echo "spring.jpa.show-sql=true" >> /opt/application.properties
     echo "spring.jpa.properties.hibernate.format_sql=true"
+    echo "PROJECT_NAME=${var.project_id}" >> /opt/application.properties
+    echo "TOPIC_NAME=${google_pubsub_topic.topic[each.key].name}" >> /opt/application.properties
   
   EOT
 
@@ -231,6 +233,37 @@ resource "google_project_iam_binding" "iam_bind_two" {
   ]
 }
 
+resource "google_project_iam_binding" "iam_bind_pubsub_editor" {
+  for_each = var.all_vpcs
+  project  = var.project_id
+  role     = each.value.iam_bind_pubsub_editor_role
+
+  members = [
+    "serviceAccount:${google_service_account.service_account[each.key].email}",
+  ]
+}
+
+
+
+resource "google_pubsub_topic" "topic" {
+  for_each = var.all_vpcs
+  name = each.value.pubsub_topic_name 
+  project = var.project_id
+  message_retention_duration = each.value.topic_message_duration
+  # depends_on = [ google_service_account.service_account ]
+
+}
+
+resource "google_pubsub_subscription" "example" {
+  for_each = var.all_vpcs
+  name  = each.value.pubsub_subscription_name
+  topic = google_pubsub_topic.topic[each.key].id
+
+  ack_deadline_seconds = each.value.subscription_ack_deadline_seconds
+
+}
+
+
 resource "google_dns_record_set" "example_record" {
   for_each = var.all_vpcs
   name    = each.value.domain
@@ -238,6 +271,74 @@ resource "google_dns_record_set" "example_record" {
   ttl     = each.value.cache_ttl
   managed_zone = each.value.dns_managed_zone
   rrdatas = [google_compute_instance.my-instance[each.key].network_interface[0].access_config[0].nat_ip]
+}
+
+resource "google_vpc_access_connector" "connector" {
+  for_each = var.all_vpcs
+  name          = each.value.vpc_access_connector_name
+  ip_cidr_range = each.value.vpc_access_connector_ip_range
+  network       = google_compute_network.vpc[each.key].self_link
+}
+
+resource "google_service_account" "service_account_cloudfunc" {
+  for_each = var.all_vpcs
+  account_id   = each.value.service_account_cloudfunc_id
+}
+
+resource "google_project_iam_binding" "iam_bind_cloudfunc" {
+  for_each = var.all_vpcs
+  project  = var.project_id
+  role     = each.value.iam_bind_pubsub_subscriber_role
+
+  members = [
+    "serviceAccount:${google_service_account.service_account_cloudfunc[each.key].email}",
+  ]
+}
+resource "google_cloudfunctions2_function" "function" {
+  for_each = var.all_vpcs
+  name = each.value.cloud_function_name
+  location = var.region
+    build_config {
+    runtime = each.value.cloud_function_build_lang
+    entry_point = each.value.cloud_function_entry_point 
+    source {
+      storage_source {
+        bucket = each.value.cloud_bucket_name
+        object = each.value.cloud_function_source
+      }
+    }
+
+    
+  }
+
+    service_config {
+    max_instance_count  = each.value.cloud_func_max_instances
+    min_instance_count = each.value.cloud_func_min_instances
+    available_memory    = each.value.cloud_func_available_memory
+    timeout_seconds     = each.value.cloud_func_timeout
+    max_instance_request_concurrency = each.value.max_instance_request_concurrency
+    available_cpu = each.value.cloud_func_available_cpu
+    environment_variables = {
+        DB_URL = "jdbc:postgresql://${google_sql_database_instance.postgres-db-instance[each.key].ip_address.0.ip_address}:${each.value.cloudsql_port}/webapp"
+        DB_USER = "${google_sql_user.postgres-db-user[each.key].name}"
+        DB_PASSWORD = "${google_sql_user.postgres-db-user[each.key].password}"
+    }
+    ingress_settings = each.value.cloud_func_ingress_settings
+    all_traffic_on_latest_revision = each.value.all_traffic_on_latest_revision
+    service_account_email = google_service_account.service_account_cloudfunc[each.key].email
+    vpc_connector_egress_settings = each.value.vpc_connector_egress_settings
+    vpc_connector = google_vpc_access_connector.connector[each.key].id
+  }
+
+  event_trigger {
+    trigger_region = var.region
+    event_type = each.value.cloud_func_event_type
+    pubsub_topic = google_pubsub_topic.topic[each.key].id
+    retry_policy = each.value.cloud_func_retry_policy
+  }
+
+  
+
 }
 
 

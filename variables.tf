@@ -65,12 +65,36 @@ variable "all_vpcs" {
     postgres_db_name          = string
     postgres_db_user_name = string
     service_account_id = string
+    service_account_cloudfunc_id = string
     iam_bind_logging_role = string
     iam_bind_monitoring_role = string
+    iam_bind_pubsub_editor_role = string
+    iam_bind_pubsub_subscriber_role = string
     domain = string
     dns_record_type_A = string
     cache_ttl = number
     dns_managed_zone = string
-          
+    pubsub_topic_name = string
+    topic_message_duration = string
+    pubsub_subscription_name = string
+    subscription_ack_deadline_seconds = number
+    vpc_access_connector_name = string
+    vpc_access_connector_ip_range = string
+    cloud_function_name = string
+    cloud_function_build_lang = string
+    cloud_function_entry_point = string
+    cloud_bucket_name = string
+    cloud_function_source = string
+    cloud_func_min_instances = number
+    cloud_func_max_instances = number
+    cloud_func_available_memory = string
+    cloud_func_timeout = number
+    max_instance_request_concurrency = number
+    cloud_func_available_cpu = string
+    cloud_func_ingress_settings = string
+    all_traffic_on_latest_revision = bool
+    vpc_connector_egress_settings = string
+    cloud_func_event_type = string
+    cloud_func_retry_policy = string
   }))
 }
