@@ -13,6 +13,20 @@ variable "region" {
 variable "db_name_suffix_length"{
   type = number
 }
+variable "health_check_name"{
+  type = string
+}
+
+variable "ss_cert_private_key" {
+  type    = string
+  default = "/Users/khatna/lb_ssl.key"
+}
+
+variable "ss_cert_certificate_path" {
+  type    = string
+  default = "/Users/khatna/lb_ssl/khatan_me.crt"
+}
+
 
 variable "all_vpcs" {
   type = map(object({
@@ -96,5 +110,56 @@ variable "all_vpcs" {
     vpc_connector_egress_settings = string
     cloud_func_event_type = string
     cloud_func_retry_policy = string
+    lb_subnet_purpose = string
+    lb_subnet_role = string
+    instance_template_tags = list(string)
+    instance_template_disk_auto_delete = bool
+    instance_template_disk_boot = bool
+    # instance_template_lifecycle_create_before_destroy = bool
+    health_check_timeout_sec = number
+    health_check_check_interval = number
+    health_check_healthy_threshold = number
+    health_check_unhealthy_threshold = number
+    health_check_port = number
+    health_check_request_path = string
+    health_check_log_enable = bool
+    mig_name = string
+    mig_base_instance_name = string
+    mig_distribution_policy_zones = list(string)
+    mig_named_port = string
+    mig_autohealing_policy_initial_delay_sec = number
+    autoscaler_name = string
+    autoscaler_max_replicas = number
+    autoscaler_min_replicas = number
+    autoscaler_cooldown_period = number
+    autoscaler_mode = string
+    autoscaler_cpu_utilization = number
+    ssl_cert_name_prefix = string
+    # ss_cert_private_key = file(path)
+    # ss_cert_certificate_path = file(path)
+    ssl_policy_name = string
+    ssl_policy_profile = string
+    target_https_proxy_name = string
+    compute_address_name = string
+    compute_forwarding_rule_name = string
+    compute_forwarding_rule_ip_protocol = string
+    compute_forwarding_rule_lb_scheme = string
+    compute_forwarding_rule_port= string
+    compute_region_url_map_name  = string
+    backend_service_balancing_mode = string
+    backend_service_capacity_scaler = number
+    backend_service_name = string
+    backend_service_protocol = string
+    backend_service_timeout = number
+    compute_firewall_allow_health_check_name = string
+    compute_firewall_allow_health_check_allow_protocol = string
+    compute_firewall_allow_health_check_direction = string
+    compute_firewall_allow_health_check_priority = number
+    compute_firewall_allow_health_check_source_ranges = list(string)
+    compute_firewall_allow_proxy_name = string
+    compute_firewall_allow_proxy_allow_ports = list(string)
+    
+
+    
   }))
 }
