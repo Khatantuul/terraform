@@ -80,6 +80,7 @@ variable "all_vpcs" {
     postgres_db_user_name = string
     service_account_id = string
     service_account_cloudfunc_id = string
+    service_account_cloudsql_id = string
     iam_bind_logging_role = string
     iam_bind_monitoring_role = string
     iam_bind_pubsub_editor_role = string
@@ -98,6 +99,8 @@ variable "all_vpcs" {
     cloud_function_build_lang = string
     cloud_function_entry_point = string
     cloud_bucket_name = string
+    cloud_bucket_storage_class = string
+    cloud_bucket_force_destroy = bool
     cloud_function_source = string
     cloud_func_min_instances = number
     cloud_func_max_instances = number
@@ -158,8 +161,15 @@ variable "all_vpcs" {
     compute_firewall_allow_health_check_source_ranges = list(string)
     compute_firewall_allow_proxy_name = string
     compute_firewall_allow_proxy_allow_ports = list(string)
-    
-
-    
+    crypto_key_role = string
+    google_project_service_identity_service = string
+    cloud_kms_admin_role = string
+    cloud_key_ring_name = string
+    crypto_vm_key_name = string
+    crypto_sql_key_name = string
+    crypto_storage_key_name = string
+    crypto_key_purpose = string
+    crypto_key_rotation_period = string
+    crypto_vm_binding_sa = string
   }))
 }

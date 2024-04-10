@@ -143,6 +143,52 @@ resource "random_id" "db_name_suffix" {
   byte_length = var.db_name_suffix_length
 }
 
+
+
+# resource "google_kms_crypto_key_iam_binding" "im_binding_key_for_sql" {
+#   for_each = var.all_vpcs
+#   provider      = google-beta
+#   crypto_key_id = google_kms_crypto_key.sql_key.id
+#   role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+
+#   members = [
+#     "serviceAccount:${google_service_account.service_account_for_cloud_sql[each.key].email}",
+#   ]
+# }
+
+
+# resource "google_project_iam_binding" "cloudsql_admin_binding" {
+#   for_each = var.all_vpcs
+
+#   project = var.project_id
+#   role    = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+
+#   members = [
+#     "serviceAccount:${google_service_account.service_account_for_cloud_sql[each.key].email}",
+#   ]
+
+#   # Define this binding to depend on the service account creation
+#   depends_on = [google_kms_crypto_key.sql_key]
+# }
+
+resource "google_project_service_identity" "gcp_sa_cloud_sql" {
+  for_each = var.all_vpcs
+  provider = google-beta
+  project = var.project_id
+  service  = each.value.google_project_service_identity_service
+} 
+
+resource "google_kms_crypto_key_iam_binding" "crypto_key" {
+  for_each = var.all_vpcs
+  provider      = google-beta
+  crypto_key_id = google_kms_crypto_key.sql_key.id
+  role          = each.value.crypto_key_role
+
+  members = [
+    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}",
+  ]
+}
+
 resource "google_sql_database_instance" "postgres-db-instance" {
   for_each = var.all_vpcs
 
@@ -152,7 +198,8 @@ resource "google_sql_database_instance" "postgres-db-instance" {
   name                = "${each.value.postgres_db_instance_name}-${random_id.db_name_suffix.hex}"
   database_version    = each.value.postgres_db_version
   deletion_protection = each.value.postgres_deletion_protection
-
+  encryption_key_name = google_kms_crypto_key.sql_key.id
+  
   depends_on = [google_service_networking_connection.private_vpc_connection]
 
   settings {
@@ -167,14 +214,24 @@ resource "google_sql_database_instance" "postgres-db-instance" {
       private_network = google_compute_network.vpc[each.key].self_link
 
     }
-    #  database_flags {
-    #   name  = "max_connections"
-    #   value = "100"  
-    # }
-
+     database_flags {
+      name  = "max_connections"
+      value = "100"  
+    }
+    
   }
   
+  
 }
+
+resource "google_project_iam_member" "project_kms_admin" {
+  for_each = var.all_vpcs
+  project = var.project_id
+  role    = each.value.cloud_kms_admin_role
+  member  = "serviceAccount:${google_service_account.service_account[each.key].email}"
+}
+
+
 
 resource "google_sql_database" "postgres-db" {
   for_each = var.all_vpcs
@@ -205,8 +262,6 @@ resource "google_service_account" "service_account" {
   # display_name = "Khatnaa Service Account"
 }
 
-
-
 resource "google_project_iam_binding" "iam_bind" {
   for_each = var.all_vpcs
   project = var.project_id
@@ -234,6 +289,39 @@ resource "google_project_iam_binding" "iam_bind_pubsub_editor" {
   members = [
     "serviceAccount:${google_service_account.service_account[each.key].email}",
   ]
+}
+
+resource "google_project_iam_binding" "im_binding_key_for_instemplate_two" {
+  for_each = var.all_vpcs
+
+  project      = var.project_id
+  role          = each.value.crypto_key_role
+
+  members = [
+    "serviceAccount:${google_service_account.service_account[each.key].email}",
+  ]
+}
+
+data "google_storage_project_service_account" "gcs_account" {
+}
+
+resource "google_kms_crypto_key_iam_binding" "binding" {
+  crypto_key_id = google_kms_crypto_key.storage_key.id
+  role          = each.value.crypto_key_role
+
+  members = ["serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}"]
+}
+
+resource "google_storage_bucket" "example_bucket" {
+  for_each = var.all_vpcs
+  name     = each.value.cloud_bucket_name
+  location = var.region
+  storage_class = each.value.cloud_bucket_storage_class
+  encryption {
+    default_kms_key_name = google_kms_crypto_key.storage_key.id
+  }
+  force_destroy = each.value.cloud_bucket_force_destroy
+  depends_on = [google_kms_crypto_key_iam_binding.binding]
 }
 
 
@@ -337,13 +425,31 @@ resource "google_cloudfunctions2_function" "function" {
 resource "google_compute_region_instance_template" "instance_template" {
   for_each = var.all_vpcs
   name = "${each.value.vm_name}-template"
+  region = var.region
+  project = var.project_id
   machine_type = each.value.vm_machine_type
   tags         = each.value.instance_template_tags
+
+  service_account {
+    email  = google_service_account.service_account[each.key].email
+    scopes = ["cloud-platform"]
+  }
   disk{
     source_image = each.value.image
     auto_delete = each.value.instance_template_disk_auto_delete
     boot = each.value.instance_template_disk_boot
+    source_image_encryption_key {
+      kms_key_service_account = google_service_account.service_account[each.key].email
+      kms_key_self_link = google_kms_crypto_key.vm_key.id
+    }
+    disk_encryption_key {
+      kms_key_self_link = google_kms_crypto_key.vm_key.id
+    }
   }
+
+  
+
+ 
    network_interface {
     access_config {
       network_tier = each.value.vm_networking_tier
@@ -368,10 +474,10 @@ resource "google_compute_region_instance_template" "instance_template" {
   
   EOT
 
-   service_account {
-    email  = google_service_account.service_account[each.key].email
-    scopes = ["cloud-platform"]
-  }
+  #  service_account {
+  #   email  = google_service_account.service_account[each.key].email
+  #   scopes = ["cloud-platform"]
+  # }
    lifecycle {
     create_before_destroy = true
   }
@@ -563,4 +669,56 @@ resource "google_compute_firewall" "allow_proxy" {
   priority      = each.value.compute_firewall_allow_health_check_priority
   source_ranges = [google_compute_subnetwork.load-balancer-subnet[each.key].ip_cidr_range]
   target_tags   = google_compute_region_instance_template.instance_template[each.key].tags
+}
+
+resource "google_kms_key_ring" "my_key_ring2" {
+  for_each = var.all_vpcs
+  name     = each.value.cloud_key_ring_name
+  location = var.region
+}
+
+resource "google_kms_crypto_key" "vm_key" {
+  for_each = var.all_vpcs
+  name       = each.value.crypto_vm_key_name
+  key_ring   = google_kms_key_ring.my_key_ring2.id
+  purpose    = each.value.crypto_key_purpose
+  rotation_period = each.value.crypto_key_rotation_period
+    lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "google_kms_crypto_key_iam_binding" "vm_key_binding" {
+  for_each = var.all_vpcs
+  provider      = google-beta
+  crypto_key_id = google_kms_crypto_key.vm_key.id
+  role          = each.value.crypto_key_role
+
+  members = [
+    "serviceAccount:${each.value.crypto_vm_binding_sa}",
+  ]
+}
+
+resource "google_kms_crypto_key" "sql_key" {
+  for_each = var.all_vpcs
+  name       = each.value.crypto_sql_key_name
+  key_ring   = google_kms_key_ring.my_key_ring2.id
+  purpose    = each.value.crypto_key_purpose
+  rotation_period = each.value.crypto_key_rotation_period
+    lifecycle {
+    prevent_destroy = false
+  }
+}
+
+
+
+resource "google_kms_crypto_key" "storage_key" {
+  for_each = var.all_vpcs
+  name       = each.value.crypto_storage_key_name
+  key_ring   = google_kms_key_ring.my_key_ring2.id
+  purpose    = each.value.crypto_key_purpose
+  rotation_period = each.value.crypto_key_rotation_period
+    lifecycle {
+    prevent_destroy = false
+  }
 }
