@@ -181,11 +181,11 @@ resource "google_project_service_identity" "gcp_sa_cloud_sql" {
 resource "google_kms_crypto_key_iam_binding" "crypto_key" {
   for_each = var.all_vpcs
   provider      = google-beta
-  crypto_key_id = google_kms_crypto_key.sql_key.id
+  crypto_key_id = google_kms_crypto_key.sql_key[each.key].id
   role          = each.value.crypto_key_role
 
   members = [
-    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}",
+    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql[each.key].email}",
   ]
 }
 
@@ -198,7 +198,7 @@ resource "google_sql_database_instance" "postgres-db-instance" {
   name                = "${each.value.postgres_db_instance_name}-${random_id.db_name_suffix.hex}"
   database_version    = each.value.postgres_db_version
   deletion_protection = each.value.postgres_deletion_protection
-  encryption_key_name = google_kms_crypto_key.sql_key.id
+  encryption_key_name = google_kms_crypto_key.sql_key[each.key].id
   
   depends_on = [google_service_networking_connection.private_vpc_connection]
 
@@ -306,7 +306,8 @@ data "google_storage_project_service_account" "gcs_account" {
 }
 
 resource "google_kms_crypto_key_iam_binding" "binding" {
-  crypto_key_id = google_kms_crypto_key.storage_key.id
+  for_each = var.all_vpcs
+  crypto_key_id = google_kms_crypto_key.storage_key[each.key].id
   role          = each.value.crypto_key_role
 
   members = ["serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}"]
@@ -318,7 +319,7 @@ resource "google_storage_bucket" "example_bucket" {
   location = var.region
   storage_class = each.value.cloud_bucket_storage_class
   encryption {
-    default_kms_key_name = google_kms_crypto_key.storage_key.id
+    default_kms_key_name = google_kms_crypto_key.storage_key[each.key].id
   }
   force_destroy = each.value.cloud_bucket_force_destroy
   depends_on = [google_kms_crypto_key_iam_binding.binding]
@@ -440,10 +441,10 @@ resource "google_compute_region_instance_template" "instance_template" {
     boot = each.value.instance_template_disk_boot
     source_image_encryption_key {
       kms_key_service_account = google_service_account.service_account[each.key].email
-      kms_key_self_link = google_kms_crypto_key.vm_key.id
+      kms_key_self_link = google_kms_crypto_key.vm_key[each.key].id
     }
     disk_encryption_key {
-      kms_key_self_link = google_kms_crypto_key.vm_key.id
+      kms_key_self_link = google_kms_crypto_key.vm_key[each.key].id
     }
   }
 
@@ -680,7 +681,7 @@ resource "google_kms_key_ring" "my_key_ring2" {
 resource "google_kms_crypto_key" "vm_key" {
   for_each = var.all_vpcs
   name       = each.value.crypto_vm_key_name
-  key_ring   = google_kms_key_ring.my_key_ring2.id
+  key_ring   = google_kms_key_ring.my_key_ring2[each.key].id
   purpose    = each.value.crypto_key_purpose
   rotation_period = each.value.crypto_key_rotation_period
     lifecycle {
@@ -691,7 +692,7 @@ resource "google_kms_crypto_key" "vm_key" {
 resource "google_kms_crypto_key_iam_binding" "vm_key_binding" {
   for_each = var.all_vpcs
   provider      = google-beta
-  crypto_key_id = google_kms_crypto_key.vm_key.id
+  crypto_key_id = google_kms_crypto_key.vm_key[each.key].id
   role          = each.value.crypto_key_role
 
   members = [
@@ -702,7 +703,7 @@ resource "google_kms_crypto_key_iam_binding" "vm_key_binding" {
 resource "google_kms_crypto_key" "sql_key" {
   for_each = var.all_vpcs
   name       = each.value.crypto_sql_key_name
-  key_ring   = google_kms_key_ring.my_key_ring2.id
+  key_ring   = google_kms_key_ring.my_key_ring2[each.key].id
   purpose    = each.value.crypto_key_purpose
   rotation_period = each.value.crypto_key_rotation_period
     lifecycle {
@@ -715,7 +716,7 @@ resource "google_kms_crypto_key" "sql_key" {
 resource "google_kms_crypto_key" "storage_key" {
   for_each = var.all_vpcs
   name       = each.value.crypto_storage_key_name
-  key_ring   = google_kms_key_ring.my_key_ring2.id
+  key_ring   = google_kms_key_ring.my_key_ring2[each.key].id
   purpose    = each.value.crypto_key_purpose
   rotation_period = each.value.crypto_key_rotation_period
     lifecycle {
